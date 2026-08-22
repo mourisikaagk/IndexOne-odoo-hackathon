@@ -32,9 +32,15 @@ function signToken(user) {
 function verifyToken(token) {
   const [payload, signature] = (token || '').split('.');
   const expected = crypto.createHmac('sha256', secret()).update(payload || '').digest('base64url');
-  if (!payload || !signature || !crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) return null;
-  const data = JSON.parse(Buffer.from(payload, 'base64url').toString());
-  return data.exp > Date.now() ? data : null;
+  const receivedBuffer = Buffer.from(signature || '');
+  const expectedBuffer = Buffer.from(expected);
+  if (!payload || !signature || receivedBuffer.length !== expectedBuffer.length || !crypto.timingSafeEqual(receivedBuffer, expectedBuffer)) return null;
+  try {
+    const data = JSON.parse(Buffer.from(payload, 'base64url').toString());
+    return data.sub && data.role && data.exp > Date.now() ? data : null;
+  } catch {
+    return null;
+  }
 }
 
 module.exports = { hashPassword, verifyPassword, signToken, verifyToken };
