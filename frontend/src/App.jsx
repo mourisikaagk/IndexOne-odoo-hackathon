@@ -17,7 +17,26 @@ function AuthPage({ onAuthenticated }) {
 }
 
 function Unauthorized({ user }) { return <main className="message-page"><div><h1>Unauthorized</h1><p>You are not authorized to access this page.</p><button onClick={() => navigate(dashboardFor(user.role), true)}>Return to dashboard</button></div></main> }
-function Portal({ user, onLogout, path }) { const isAdmin = user.role === 'ADMIN'; const links = isAdmin ? adminLinks : employeeLinks; const title = links.find(([route]) => route === path)?.[1] || 'Workspace'; return <div className="portal"><aside><div className="brand">HRMS</div><p className="role-label">{isAdmin ? 'ADMIN / HR' : 'EMPLOYEE'}</p><nav>{links.map(([route, label]) => <button className={path === route ? 'active' : ''} key={route} onClick={() => navigate(route)}>{label}</button>)}</nav><button className="logout" onClick={onLogout}>Logout</button></aside><main className="content"><header><div><p className="eyebrow">{isAdmin ? 'ADMINISTRATION' : 'MY WORKSPACE'}</p><h1>{title}</h1></div><div className="account"><strong>{user.name}</strong><span>{user.email}</span></div></header><section className="placeholder"><h2>{title}</h2><p>This page is protected and ready for its module implementation.</p></section></main></div> }
+function Dashboard() {
+  const [dashboard, setDashboard] = useState(null)
+  const [error, setError] = useState(false)
+
+  const loadDashboard = () => {
+    setError(false)
+    request('/api/admin/dashboard')
+      .then((response) => setDashboard(response.data))
+      .catch(() => setError(true))
+  }
+
+  useEffect(loadDashboard, [])
+  if (!dashboard && !error) return <section className="dashboard-state">Loading dashboard...</section>
+  if (error) return <section className="dashboard-state"><p>Unable to load dashboard data.</p><button onClick={loadDashboard}>Retry</button></section>
+
+  const cards = [['Total Employees', dashboard.totalEmployees], ['Present Today', dashboard.presentToday], ['Employees on Leave', dashboard.onLeave], ['Pending Leave Requests', dashboard.pendingLeaves]]
+  return <><section className="metric-grid">{cards.map(([label, value]) => <article className="metric-card" key={label}><p>{label}</p><strong>{value ?? 0}</strong></article>)}</section><section className="dashboard-grid"><article className="panel"><h2>Payroll Summary</h2><div className="payroll-row"><span>Total payroll</span><strong>{dashboard.payrollSummary?.total ?? 0}</strong></div><div className="payroll-row"><span>Employees processed</span><strong>{dashboard.payrollSummary?.processedEmployees ?? 0}</strong></div><p className="panel-note">Payroll data will appear here once processed.</p></article><article className="panel activity-panel"><h2>Recent Activities</h2>{dashboard.recentActivities?.length ? <div className="table-wrap"><table><thead><tr><th>Activity</th><th>Employee</th><th>Date</th><th>Status</th></tr></thead><tbody>{dashboard.recentActivities.map((activity) => <tr key={activity.id}><td>{activity.activity}</td><td>{activity.employee}</td><td>{new Date(activity.createdAt).toLocaleDateString()}</td><td><span className="status">{activity.status}</span></td></tr>)}</tbody></table></div> : <p className="empty-state">No recent activities</p>}</article></section></>
+}
+
+function Portal({ user, onLogout, path }) { const isAdmin = user.role === 'ADMIN'; const links = isAdmin ? adminLinks : employeeLinks; const title = links.find(([route]) => route === path)?.[1] || 'Workspace'; const dashboard = isAdmin && path === '/admin/dashboard'; return <div className="portal"><aside><div className="brand">HRMS</div><p className="role-label">{isAdmin ? 'ADMIN / HR' : 'EMPLOYEE'}</p><nav>{links.map(([route, label]) => <button className={path === route ? 'active' : ''} key={route} onClick={() => navigate(route)}>{label}</button>)}</nav><button className="logout" onClick={onLogout}>Logout</button></aside><main className="content"><header><div><p className="eyebrow">{isAdmin ? 'ADMINISTRATION' : 'MY WORKSPACE'}</p><h1>{title}</h1></div><div className="account"><strong>{user.name}</strong><span>{user.email}</span></div></header>{dashboard ? <Dashboard /> : <section className="placeholder"><h2>{title}</h2><p>This page is protected and ready for its module implementation.</p></section>}</main></div> }
 
 function App() {
   const [path, setPath] = useState(window.location.pathname); const [user, setUser] = useState(() => { try { return JSON.parse(localStorage.getItem(USER_KEY)) } catch { return null } }); const [checking, setChecking] = useState(Boolean(localStorage.getItem(TOKEN_KEY)))

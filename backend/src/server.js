@@ -42,15 +42,31 @@ app.get('/api/auth/me', requireAuth, (req, res) => res.json({ user: publicUser(r
 app.get('/api/admin/dashboard', requireAuth, allowRoles('ADMIN'), asyncRoute(async (req, res) => {
   const today = dayStart();
   const tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate() + 1);
-  const [totalEmployees, presentToday, onLeave, pendingLeaves, payroll] = await Promise.all([
+  const [totalEmployees, presentToday, onLeave, pendingLeaves, recentLeaves] = await Promise.all([
     User.countDocuments({ role: 'EMPLOYEE', status: 'ACTIVE' }),
     Attendance.countDocuments({ date: { $gte: today, $lt: tomorrow }, status: 'PRESENT' }),
     Leave.countDocuments({ status: 'APPROVED', fromDate: { $lte: today }, toDate: { $gte: today } }),
     Leave.countDocuments({ status: 'PENDING' }),
-    User.aggregate([{ $match: { role: 'EMPLOYEE', status: 'ACTIVE' } }, { $group: { _id: null, total: { $sum: '$salary' } } }]),
+    Leave.find().sort({ updatedAt: -1 }).limit(5).populate('employeeId', 'name').lean(),
   ]);
-  const recentLeaves = await Leave.find().sort({ updatedAt: -1 }).limit(5).populate('employeeId', 'name').lean();
-  res.json({ totalEmployees, presentToday, onLeave, pendingLeaves, payrollSummary: { totalMonthlySalary: payroll[0]?.total || 0 }, recentActivities: recentLeaves.map((leave) => ({ id: leave._id, type: 'LEAVE', message: `${leave.employeeId?.name || 'Employee'} leave ${leave.status.toLowerCase()}`, createdAt: leave.updatedAt })) });
+  res.json({
+    success: true,
+    data: {
+      totalEmployees,
+      presentToday,
+      onLeave,
+      pendingLeaves,
+      // Payroll has no model or API in this project yet, so this remains a truthful default.
+      payrollSummary: { total: 0, processedEmployees: 0 },
+      recentActivities: recentLeaves.map((leave) => ({
+        id: leave._id,
+        activity: 'Leave request',
+        employee: leave.employeeId?.name || 'Employee',
+        status: leave.status,
+        createdAt: leave.updatedAt,
+      })),
+    },
+  });
 }));
 
 app.get('/api/employees', requireAuth, allowRoles('ADMIN'), asyncRoute(async (req, res) => {
