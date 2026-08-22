@@ -10,7 +10,7 @@ const timeText = (date) => date ? new Date(date).toLocaleTimeString([], { hour: 
 function App() {
   const [user, setUser] = useState(null), [ready, setReady] = useState(false), [notice, setNotice] = useState(null);
   const flash = useCallback((type, text) => setNotice({ type, text }), []);
-  useEffect(() => { (async () => { if (localStorage.getItem("token")) try { setUser((await api.get("/auth/me")).data.user); } catch { localStorage.removeItem("token"); } finally { setReady(true); } })(); }, []);
+  useEffect(() => { (async () => { try { if (localStorage.getItem("token")) setUser((await api.get("/auth/me")).data.user); } catch { localStorage.removeItem("token"); } finally { setReady(true); } })(); }, []);
   const logout = async () => { try { await api.post("/auth/logout"); } catch {} localStorage.removeItem("token"); setUser(null); flash("success", "You have been logged out."); };
   if (!ready) return <div className="message-page"><p>Restoring your session…</p></div>;
   return user ? <Portal user={user} setUser={setUser} logout={logout} notice={notice} dismiss={() => setNotice(null)} flash={flash} /> : <Auth onAuthenticated={setUser} flash={flash} />;
