@@ -9,7 +9,7 @@
 }
 
 * { box-sizing: border-box; }
+html, body, #root { min-height: 100%; height: 100%; }
 body { margin: 0; min-width: 320px; background: #f4f6f8; color: #1f2937; }
-#root { min-height: 100vh; }
 h1, h2, h3 { font-family: 'Poppins', sans-serif; }
 button, input, select { font: inherit; }
