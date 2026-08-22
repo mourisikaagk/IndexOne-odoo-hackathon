@@ -9,7 +9,8 @@ const { hashPassword, verifyPassword, signToken } = require('./utils/auth');
 const { requireAuth, allowRoles, revokedTokens } = require('./middleware/auth');
 
 const app = express();
-app.use(cors({ origin: process.env.CLIENT_URL || 'http://localhost:5173' }));
+const clientOrigins = [process.env.CLIENT_URL || 'http://localhost:5173', 'http://127.0.0.1:5173'];
+app.use(cors({ origin: (origin, callback) => callback(null, !origin || clientOrigins.includes(origin)) }));
 app.use(express.json());
 
 const asyncRoute = (handler) => (req, res, next) => Promise.resolve(handler(req, res, next)).catch(next);
