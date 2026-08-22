@@ -61,12 +61,13 @@ function EmployeeDashboard() {
 }
 
 const cardStyle = {
-  border: "1px solid #ddd",
-  borderRadius: "12px",
+  border: "1px solid #eee",
+  borderLeft: "4px solid #0F766E",
+  borderRadius: "10px",
   padding: "20px",
   cursor: "pointer",
-  background: "#f9fafb",
-  boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
+  background: "#fff",
+  boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
 };
 
 export default EmployeeDashboard;
