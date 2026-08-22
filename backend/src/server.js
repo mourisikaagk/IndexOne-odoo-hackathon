@@ -39,6 +39,16 @@ app.post('/api/auth/login', asyncRoute(async (req, res) => {
 app.post('/api/auth/logout', requireAuth, (req, res) => { revokedTokens.add(req.token); res.json({ message: 'Logged out successfully.' }); });
 app.get('/api/auth/me', requireAuth, (req, res) => res.json({ user: publicUser(req.user) }));
 
+// Employees may keep their own contact details current; job and access details
+// remain admin-managed.
+app.patch('/api/profile', requireAuth, asyncRoute(async (req, res) => {
+  const { phone } = req.body;
+  if (phone !== undefined && String(phone).trim().length > 30) return res.status(400).json({ message: 'Phone number is too long.' });
+  req.user.phone = phone === undefined ? req.user.phone : String(phone).trim();
+  await req.user.save();
+  res.json({ user: publicUser(req.user), message: 'Profile updated.' });
+}));
+
 app.get('/api/admin/dashboard', requireAuth, allowRoles('ADMIN'), asyncRoute(async (req, res) => {
   const today = dayStart();
   const tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate() + 1);
@@ -110,6 +120,7 @@ app.post('/api/leaves', requireAuth, asyncRoute(async (req, res) => {
 }));
 app.get('/api/leaves', requireAuth, asyncRoute(async (req, res) => {
   const query = req.user.role === 'ADMIN' ? {} : { employeeId: req.user.id };
+  if (req.query.status && ['PENDING', 'APPROVED', 'REJECTED'].includes(req.query.status.toUpperCase())) query.status = req.query.status.toUpperCase();
   const leaves = await Leave.find(query).sort({ createdAt: -1 }).populate('employeeId', 'name email department');
   res.json({ leaves });
 }));
@@ -144,7 +155,28 @@ app.post('/api/attendance/check-out', requireAuth, asyncRoute(async (req, res) =
 }));
 app.get('/api/attendance/today', requireAuth, allowRoles('ADMIN'), asyncRoute(async (req, res) => {
   const today = dayStart(); const tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate() + 1);
-  res.json({ attendance: await Attendance.find({ date: { $gte: today, $lt: tomorrow } }).populate('employeeId', 'name email department').sort({ checkIn: -1 }) });
+  const [employees, marked] = await Promise.all([
+    User.find({ role: 'EMPLOYEE', status: 'ACTIVE' }).select('name email department designation').sort({ name: 1 }).lean(),
+    Attendance.find({ date: { $gte: today, $lt: tomorrow } }).populate('employeeId', 'name email department designation').lean(),
+  ]);
+  const entries = new Map(marked.map((item) => [item.employeeId?._id.toString(), item]));
+  const attendance = employees.map((employee) => entries.get(employee._id.toString()) || ({
+    _id: `absent-${employee._id}`, employeeId: employee, date: today, status: 'ABSENT', checkIn: null, checkOut: null,
+  }));
+  res.json({ attendance });
+}));
+app.get('/api/attendance/summary', requireAuth, allowRoles('ADMIN'), asyncRoute(async (req, res) => {
+  const match = {};
+  if (req.query.from || req.query.to) {
+    match.date = {};
+    if (req.query.from) match.date.$gte = dayStart(req.query.from);
+    if (req.query.to) { const end = dayStart(req.query.to); end.setDate(end.getDate() + 1); match.date.$lt = end; }
+  }
+  const summary = await Attendance.aggregate([
+    { $match: match },
+    { $group: { _id: '$status', count: { $sum: 1 } } },
+  ]);
+  res.json({ summary: Object.fromEntries(summary.map((item) => [item._id, item.count])) });
 }));
 app.get('/api/attendance/:employeeId', requireAuth, asyncRoute(async (req, res) => {
   if (req.user.role !== 'ADMIN' && req.user.id !== req.params.employeeId) return res.status(403).json({ message: 'You can only view your own attendance.' });
@@ -152,6 +184,7 @@ app.get('/api/attendance/:employeeId', requireAuth, asyncRoute(async (req, res) 
 }));
 app.get('/api/attendance', requireAuth, allowRoles('ADMIN'), asyncRoute(async (req, res) => {
   const query = {}; if (req.query.date) query.date = dayStart(req.query.date); if (req.query.employeeId) query.employeeId = req.query.employeeId;
+  if (req.query.status && ['PRESENT', 'ABSENT', 'HALF_DAY', 'LEAVE'].includes(req.query.status.toUpperCase())) query.status = req.query.status.toUpperCase();
   res.json({ attendance: await Attendance.find(query).populate('employeeId', 'name email department').sort({ date: -1 }) });
 }));
 
